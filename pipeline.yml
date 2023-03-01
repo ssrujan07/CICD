@@ -1,0 +1,35 @@
+pipeline {
+    agent any
+    
+    stages {
+        stage('Build') {
+            steps {
+                sh 'echo "Building Docker image..."'
+                sh 'docker build -t image-name .'
+            }
+        }
+        
+        stage('Push to ECR') {
+            steps {
+                withCredentials([[
+                    credentialsId: 'aws-credentials-id',
+                    accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+                ]]) {
+                    sh 'aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin aws-account-id.dkr.ecr.us-east-1.amazonaws.com'
+                    sh 'docker tag image-name:latest aws-account-id.dkr.ecr.us-east-1.amazonaws.com/image-name:latest'
+                    sh 'docker push aws-account-id.dkr.ecr.us-east-1.amazonaws.com/image-name:latest'
+                }
+            }
+        }
+        
+        stage('Deploy to EKS') {
+			steps {
+					sh "aws eks update-kubeconfig --region us-east-1 --name eks-cluster-name"
+					sh "kubectl apply -f kubernetes/deployment.yaml"
+					sh "kubectl apply -f kubernetes/service.yaml"
+				  }
+            }
+        }
+    }
+}
